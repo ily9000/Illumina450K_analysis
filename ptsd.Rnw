@@ -1,0 +1,233 @@
+\documentclass[12pt]{article}
+
+\usepackage{times}
+\usepackage[cm]{fullpage}
+
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+<<set_options, cache = FALSE, echo = TRUE, include = FALSE>>=
+library(methylumi)
+library(ggplot2)
+library(matrixStats)
+library(RnBeads)
+library(xtable)
+options(width = 60)
+@
+
+<<loaddata, cache = TRUE, echo = TRUE>>=
+#Provide the filename of the excel-like file from BeadStudio
+#Load Illumina methylation data into a MethyLumiSet object
+mdata <- methylumiR(filename = "ptsddata.txt")
+@
+
+<<getbetas, cache = TRUE>>=
+#load list of samples to remove
+#the samples failed quality control tests and will not be included in the analysis
+samps.rm <- read.csv('rmsamples.csv')
+samps.rm <- as.character(samps.rm$Index)
+#get the beta values (methylation signal) using methylumi function
+betas <- betas(mdata)
+
+samps.all <- colnames(betas(mdata))
+#final list of samples to include in the study
+keep <- !(samps.all %in% samps.rm)
+samps.keep <- samps.all[keep]
+
+#Samples prefixed with 'QC' are quality control samples.
+#There are a 14 total samples: 2 samples which are replicated 7 times at 
+#different positions in the plate to ensure the assay is consistent.
+temp.qc <- grep('QC', samps.keep, value = TRUE)
+#Samples in the study which are not quality control samples.
+samps.study <- samps.keep[!(samps.keep %in% temp.qc)]
+
+#Include the study sample which was replicated for first quality control set.
+samps.qc <- append(temp.qc, "20-0602182", 0)
+#The second study sample which was replicated was removed because it failed 
+#initial quality control tests.
+#The quality control samples are replicates of 2 different samples.
+samps.qc1 <- samps.qc[1:7]
+samps.qc2 <- samps.qc[8:14]
+rm(temp.qc)
+
+#Create 4 matrices of the beta values for the 4 sets of samples: 
+#1. all the samples we didn't remove which is a superset of the following
+#2. study samples: unique samples, excluding quality control samples
+#3&4. quality control samples: QC1 and QC2
+idx.samps <- match(samps.keep, samps.all)
+idx.study <- match(samps.study, samps.all)
+mdata.samps <- mdata[, idx.samps]
+mdata.study <- mdata[, idx.study]
+b.samps <- betas(mdata.samps)
+b.study <- betas(mdata.study)
+
+idx.qc1 <- match(samps.qc1, samps.all)
+idx.qc2 <- match(samps.qc2, samps.all)
+mdata.qc1 <- mdata[, idx.qc1]
+mdata.qc2 <- mdata[, idx.qc2]
+b.qc1 <- betas(mdata.qc1)
+b.qc2 <- betas(mdata.qc2)
+dim(b.qc1)
+dim(b.qc2)
+rm(betas, mdata)
+gc()
+@
+
+<<sub_study_for_qc, cache = TRUE>>=
+#Sample "20-0700173" was removed due to quality control issues.
+#However, since that sample was replicated for quality control, 
+#"QC-1-C6" is the sampe patient as "20-0700173".
+#We add the beta values of QC-1-C6 as 20-0700173 into the study sample beta matri.
+b.study <- cbind(b.study, b.qc2[,1])
+colnames(b.study)[dim(b.study)[2]] <- "20-0700173"
+@
+
+<<getpheno, cache = TRUE>>=
+#load the phenotypes (disease / no disease) for each sample from a csv file
+pData <- read.csv("vapsych.csv")
+#change the formatting for the sample names
+#so it matches the sample names used by the beta matrix
+pData$sample <- gsub('200', '20-0', pData$sample)
+
+#remove samples from phenotype dataframe which we did not keep
+pData <- pData[pData$sample %in% colnames(b.study),]
+
+#set the phenotype dataframe for the study samples
+#the position of the sample in phenotype dataframe is the
+#same as the position in the beta matrix
+idx <- match(pData$sample, colnames(b.study))
+p.study <- pData[idx,]
+rm(idx)
+
+#set phenotypes for quality control 1 & 2 samples
+#the samples are replicates from the same patient
+#so just replicate the phenotype
+p.qc1 <- pData[pData$sample == "20-0602182",]
+p.qc1 <- p.qc1[rep(1, 7),]
+p.qc1$sample <- colnames(b.qc1) 
+
+p.qc2 <- pData[pData$sample == "20-0700173",]
+p.qc2 <- p.qc2[rep(1, 7),]
+p.qc2$sample <- colnames(b.qc2) 
+@
+
+<<create_RnBeads_object, cache = TRUE>>=
+#Create 4 RnBeads objects for the 4 sets of samples:
+#all kept samples (superset of the 3 sets), study samples, qc1 samples, & qc2 sampels
+#for all samples, exclude the qc2 sample we inserted.
+#...into the study sample because we discarded the corresponding...
+#...study sample
+rnb.study <- new("RnBeadSet", pheno = p.study, betas = b.study)
+rnb.qc1 <- new("RnBeadSet", pheno = p.qc1, betas = b.qc1)
+rnb.qc2 <- new("RnBeadSet", pheno = p.qc2, betas = b.qc2)
+rnb.all <- combine(rnb.study, remove.samples(rnb.qc1, "20-0602182"))
+rnb.all <- combine(remove.samples(rnb.all, "20-0700173"), rnb.qc2)
+@
+
+<<pca, cache = TRUE>>=
+#Use PCA to transform the high-dimensional (~485K) methylation data.
+
+pca.qc1 <- rnb.execute.dreduction(rnb.qc1, target = "sites")$pca
+pca.qc2 <- rnb.execute.dreduction(rnb.qc2, target = "sites")$pca
+pca.study <- rnb.execute.dreduction(rnb.study, target = "sites")$pca
+pca.all <- rnb.execute.dreduction(rnb.all, target = "sites")$pca
+@
+
+<<plot_PC, cache = TRUE>>=
+#Plot each set of samples according to the first 2 principal components.
+#Visually look for sample outliers, 
+#and for effects related to batch processing and clinical features.
+
+plot(pca.qc1$x)
+text(pca.qc1$x, labels = substr(rownames(pca.qc1$x), 6, 8), cex =.5, pos = 2)
+plot(pca.qc2$x)
+text(pca.qc2$x, labels = substr(rownames(pca.qc2$x), 6, 8), cex = .5, pos = 2)
+plot(pca.study$x)
+text(pca.study$x, labels = c(1:149), cex =.5, pos = 2)
+plot(pca.all$x)
+text(pca.all$x, labels = c(1:149), cex = .5, pos = 2)
+@
+
+<<SNPs, cache = TRUE, echo = TRUE, eval = TRUE, results = 'asis'>>=
+#The Illumina 450K array interrogates 65 CpG sites 
+#which are known to have high variance in their methylation status between individuals. 
+
+#The 65 site names are prefixed by 'rs', create a matrix
+#with the beta values of these 65 sites for each sample
+table(is.snp <- ((substr(rownames(b.samps), 1, 2) == 'rs')))
+b.snp <-b.samps[is.snp,]
+table(n.na<- apply(is.na(b.snp), 1, sum))
+
+#We categorize the beta (methylation) values corresponding to no methylation (0),
+#methylation on a single strand (hemi-methylated) (1), 
+#or methylation on both strands (fully methylated) (2).
+b.snp[!is.na(b.snp) & b.snp<.25] <- 0
+b.snp[!is.na(b.snp) & b.snp>.75] <-2
+b.snp[!is.na(b.snp) & b.snp>.25 & b.snp<.75] <- 1
+
+#use the values of the 65 sites to create a correlation matrix between samples
+cmat <- cor(b.snp, use = 'pairwise.complete.obs')
+diag(cmat) <- NA
+
+#create a matrix of the sample pairs with correlation greater than .9
+#rownames are the 1st element in the pair
+#Sample ID column is the 2nd element in the pair
+#correlation column is the correlation score
+gcor <- which(cmat>.9, arr.ind = TRUE)
+gcor <- cbind(gcor, cmat[which(cmat>.9)])
+colnames(gcor)[3] <- 'correlation'
+gcor <- cbind(colnames(cmat)[gcor[,2]], gcor)
+colnames(gcor)[1] <- 'Sample ID'
+
+#subset of b.snp (the 65 high-variance beta value matrix)
+#containing only those samples with high correlation scores
+replic.mat <- b.snp[,unique(rownames(gcor))]
+print(xtable(head(replic.mat)))
+@
+
+<<qc_stats, cache = TRUE, eval = FALSE>>=
+#standardize (get the z-score) of the methylation values at each site
+z.qc1.t <- scale(t(b.qc1))
+z.qc2.t <- scale(t(b.qc2))
+z.qc1 <- t(z.qc1.t)
+z.qc2 <- t(z.qc2.t)
+dim(z.qc1.t)
+dim(z.qc2)
+
+#get the mean and variance of the beta value across the quality control replicates at each CpG site
+mean.qc1 <- rowMeans(b.qc1)
+mean.qc2 <- rowMeans(b.qc2)
+vars.qc1 <- rowVars(b.qc1)
+vars.qc2 <- rowVars(b.qc2)
+
+@
+
+<<generateplots, cache = TRUE, echo = TRUE, eval = FALSE>>=
+
+#create 2 density plots of beta-values, one for each set of quality control samples
+b.qc1.df <- as.data.frame(b.qc1)
+b.qc2.df <- as.data.frame(b.qc2)
+b.qc1.dfs <- stack(b.qc1.df)
+b.qc2.dfs <- stack(b.qc2.df)
+is.factor(b.qc1.dfs[,2])
+
+ggplot(b.qc1.dfs, aes(x = values)) + geom_density(aes (group = ind, colour = ind))
+ggplot(b.qc2.dfs, aes(x = values)) + geom_density(aes (group = ind, colour = ind))
+
+#create a density plot of the variance across samples at each site (~480,000 site)
+ggplot(as.data.frame(vars.qc1), aes(x=vars.qc1)) + geom_density()
+ggplot(as.data.frame(vars.qc2), aes(x=vars.qc2)) + geom_density()
+
+
+dplot <- function(m) {
+df <- as.data.frame(m)
+dfs <- stack(df)
+ggplot(dfs, aes(x = values)) + geom_density(aes (group = ind, colour = ind))
+}
+
+dplot(z.qc1)
+dplot(z.qc2)
+@
+\end{document}
