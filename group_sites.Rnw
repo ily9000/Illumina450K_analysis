@@ -1,0 +1,69 @@
+\documentclass[12pt]{article}
+
+\usepackage{times}
+\usepackage[cm]{fullpage}
+
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+CpG sites can be categorized into gene feature groups and groups based on relative location to a CpG island.
+The 6 gene feature groups are TSS1500 (within 1500 bps of a transcription start site (TSS)), 
+TSS200 (within 200 bps of a TSS), 5’UTR (5’ untranslated region), 
+first exon, body and 3’UTR (3’ untranslated region). The 5 CpG classes based on relative location to an island
+are: South Shore, North Shore, South Shelf, North Shelf, and the CpG Island. South and North are referring to 
+areas upstream and downstream of the island.
+We will categorize the CpG probes and then get the aggregate statistics to increase the power of the regression analyses.
+<<setup_methy450, cache = FALSE, echo = TRUE, include = FALSE>>=
+
+#Use a modified function from IMA library to create an object with 15 slots: 
+#bmatrix annot groupinfo TSS1500Ind TSS200Ind UTR5Ind EXON1Ind GENEBODYInd UTR3Ind
+#ISLANDInd NSHOREInd SSHOREInd NSHELFInd SSHELFInd
+#Each of the 11 slots suffixed with Ind are lists with 2 lists, PID and SID.
+#CpG sites are classified based on biological features into the slots.
+
+source('imacustom.R')
+#Inspect xmethy450 object
+#For each region/feature slot print the corresponding number of chromosomal locations
+#For the annotation, beta values, groupinfo (pData) slots print the dimension
+    for (slot in slotNames(x.methy450)){
+        if(grepl('Ind', slot, ignore.case = TRUE)){
+            print(paste0('x.methy450@', slot, '$SID'))
+            print(length(eval(parse(text = paste0('x.methy450@', slot, '$SID')))))
+        }
+        else{
+            paste0('x.methy450@', slot)
+            print(dim(eval(parse(text = paste0('x.methy450@', slot)))))
+        }
+    }
+@
+
+For each gene feature, we use the indexregionfunc() to get the median of the methylation values of the 
+sites associated with the same gene. Similarly, for each CpG island class,
+we do this for CpG probes at the same chromosomal location. We aggregate the statisitcs 
+using a biological meaningful feature to increase the power of the hypothesis test. 
+
+<<summary_statistics, cache = FALSE, echo = TRUE, include = FALSE, eval = True>>=
+#create a list of matrices of the median beta (methylation) values using the 11 region level summaries from the methy450 object
+#the rows of each matrix are the CpG sites in that summary object
+#the columns of the matrix are the individuals in the study.
+mval.region = list()
+
+#loop through and select slots associated with genes features or CpG island classes in methy450batch object
+for (s in slotNames(x.methy450)){
+    if(grepl('Ind', s, ignore.case = TRUE)){
+        obj <- slot(x.methy450, s)
+        #delete 'Ind' at the end of each region name
+        #name <- substr(s, 1, nchar(s)-3)
+        mval.region[[s]] <- indexregionfunc(indexlist= obj,
+            beta=x.methy450@bmatrix, indexmethod="median")
+    }
+}
+
+length(mval.region)
+names(mval.region)
+
+save(pData,mvalues,hm450, mval.region, file = RegrVars.RData)
+@
+\end{document}
