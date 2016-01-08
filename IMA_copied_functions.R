@@ -25,7 +25,7 @@ cat(".......\nSplit the annotation file to 11
 #For CpG sites that are not associated with any gene region, put NA as the element in its list.
     genelist[which(genelist == "character(0)")] = "NA"
     name = "UCSC_RefGene_Group"
-#create a list of lists: each CpG site has a list of gene names that it is associated with
+#create a list of lists: each CpG site has a list of gene features (ex. Body, TSS200, etc.) that it is associated with
     refgene = strsplit(as.character(annot[, name]), ";")
     refgene[which(refgene == "character(0)")] = "NA"
     listlength = lapply(refgene, length)
@@ -33,7 +33,7 @@ cat(".......\nSplit the annotation file to 11
 ##We rep col0, 1, 4, 5 according to how many sites each CpG probe is linked to 
 ##col0 are the indices, col1 are the Cpg site names
 ##col2 are the names of the associated genes
-##col3 are the names of the gene feature in which the CpG probe is located 
+##col3 are the names of the gene feature (ex. Body, TSS200, etc.) in which the CpG probe is located 
 ##col4 are the CpG site's region (i.e. Island, shore, etc.)
 ##col5 are the chromosomal location of the CpG islands
     col0 = rep(1:nrow(annot), listlength)
@@ -57,7 +57,9 @@ cat(".......\nSplit the annotation file to 11
         returnPID = lapply(temp, unique)
         return(Ind = list(SID = returnSID, PID = returnPID))
     }
-##First list of summary stats indexed by associated genes
+##each of the following contains a list such that each element corresponds to a gene.
+#each element is 2 lists SID and PID, SID contains the list of indices, and PID contains the corresponding
+#Cpgsite ex. 'cg16524862', 'cg16524863'
     TSS1500Ind = splitToRegionlist(grepname = "TSS1500")
     TSS200Ind = splitToRegionlist(grepname = "TSS200")
     UTR5Ind = splitToRegionlist(grepname = "5'UTR")
@@ -73,7 +75,7 @@ cat(".......\nSplit the annotation file to 11
         length(GENEBODYInd$SID), "UCSC REFGENE region\n3'UTR region contains:", 
         length(UTR3Ind$SID), "UCSC REFGENE region\n", fill = TRUE)
 
-##Second list of summary stats indexed by chromosomal regions
+##Second list of summary stats indexed by chromosomal regions for slots
     splitToRegionlist2 = function(grepname = c("Island", "N_Shore", 
         "S_Shore", "N_Shelf", "S_Shelf")) {
         index = col4 == grepname
@@ -86,7 +88,8 @@ cat(".......\nSplit the annotation file to 11
         returnPID = lapply(temp, unique)
         return(Ind = list(SID = returnSID, PID = returnPID))
     }
-
+#The following are also list of lists, each element refers to a chromosomal location such as `chr1:533219-534114`.
+#Each element of the list is 2 lists (SID and PID) of the CpG sites at that location.
     ISLANDInd = splitToRegionlist2(grepname = "Island")
     NSHOREInd = splitToRegionlist2(grepname = "N_Shore")
     SSHOREInd = splitToRegionlist2(grepname = "S_Shore")

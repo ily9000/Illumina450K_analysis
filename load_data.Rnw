@@ -104,6 +104,42 @@ pData$prePregBMIthreeLev[(!is.na(pData$BMI_LMP_kgm2)) & (pData$BMI_LMP_kgm2 >= 3
 pData$prePregBMIthreeLev[(!is.na(pData$BMI_LMP_kgm2)) & (pData$BMI_LMP_kgm2>=35)] <- 2
 pData$prePregBMIthreeLev <-factor(pData$prePregBMIthreeLev, levels = 0:2, labels = c("Lt30", "30toLt35", "Ge35"))
 
-save(pData,mvalues,hm450, file = RegrVars.RData)
 @
+
+The behavioral scores are the response variables in our regression analysis. We do a logarithmic transformation of them,
+so they are more uniformly distributed across the range of values.
+Prior to the log transformation, few high value responses were having majority of influence on the regression fit.
+
+<<Select_Regression_Variables, cache = FALSE, echo = FALSE, include = TRUE, eval = TRUE>>=
+#Create a dataframe with the response variables for regression and do a logarithmic ransformation on those values.
+
+#create BASC_AP_HY composite score
+pData$BASC_AP_HY <- rowMeans(cbind(pData$BASC_AP, pData$BASC_HY))
+#additional underlying behvavioral scores
+#bhv.names  <- c("BASC_AP_HY" , "BASC_AP", "BASC_HY", "BRF_ISCI", "BRF_FI",
+#    "BRF_EMI", "BRF_GEC", "BRF_IN", "BRF_SF", "BRF_PO", "BRF_WM", "BRF_EC")
+
+#names of the behavioral scores (response variables) we are interested in
+bhv.names <- c("BASC_AP_HY", "BRF_GEC", "BRF_IN", "BRF_SF", "BRF_PO", "BRF_WM", "BRF_EC")
+
+regrVals.df <- setNames(replicate(length(bhv.names),numeric(0))), bhv.names)
+
+#insert log transformed behavioral scores into dataframe
+regrVals.df$BASC_AP_HY <- log(10 + pData$BASC_AP_HY)
+regrVals.df$BRF_GEC <- log(pData$BRF_GEC - 50)
+regrVals.df$BRF_SF <- log(pData$BRF_SF - 5)
+regrVals.df$BRF_WM <- log(pData$BRF_WM - 12)
+regrVals.df$BRF_IN <- log(pData$BRF_IN - 5)
+regrVals.df$BRF_EC <- log(pData$BRF_EC - 5)
+regrVals.df$BRF_PO <- log(pData$BRF_PO - 5)
+
+regrVals.df <- data.fram(regrVals.df)
+
+cntrl.names <- c("age_mo_SR_Surv", "sex", "birthwt_kg", 
+    "GestAge_weeks", "education_3cat", "Race3", "parity_3cat", 
+    "mom_age_delv", "prePregBMIthreeLev", "asrs_ADHD_2cat")
+
+regrVals.df <- cbind(regrVals.df, pData[names(pData) %in% cntrl.names])
+@
+
 \end{document}
