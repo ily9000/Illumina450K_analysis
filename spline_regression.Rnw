@@ -1,0 +1,47 @@
+\documentclass[12pt]{article}
+
+\usepackage{times}
+\usepackage[cm]{fullpage}
+
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+<<spline_regr_func, cache = TRUE, echo = FALSE, include = TRUE, eval = TRUE>>=
+
+lm.site <- function(cntrl, testVal, regrVals, response) {
+
+    fmla<-paste(response, '~', paste(cntrl, collapse = '+'), 
+        "+bs(regrVals$mval, degree = 3)", sep = "")
+
+    n.probes = dim(m)[1]
+    pval <- vector(mode = "numeric", length = n.probes)
+    for (i in 1:n.probes) {
+        regrVals$x <- m[i,]
+        lm.out <- lm(as.formula(fmla), data = regrVals)
+        pval[i] <- anova(lm.out)["bs(regrVals$x, degree = 3)", "Pr(>F)"]
+    }
+    # lm.out <- lm(pdat$BASC_AP_HY~pdat$age_mo_SR_Surv+pdat$sex+pdat$birthwt_kg+
+    #      pdat$GestAge_weeks+pdat$education_3cat+pdat$Race3+pdat$parity_3cat+
+    #      pdat$mom_age_delv+pdat$prePregBMIthreeLev+pdat$asrs_ADHD_2cat+pdat$x, data = pdat)
+    
+   return(pval)
+}
+@
+
+<<site_level_spline_regression, cache = TRUE, echo = TRUE, eval = TRUE>>=
+
+#initialize the column we will use to store the methylation value
+#we will run regression against each methylation value and store the pvalue in regr.site.pv
+regrVals.df$x <- NA
+#behavioral features we are interested in testing
+bhvFtrs <- c("BASC_AP_HY1", "BRF_GEC1", "BRF_IN1", "BRF_SF1", "BRF_PO1", "BRF_WM1", "BRF_EC1")
+#features we will use as covariates
+covariates <- "age_mo_SR_Surv", "sex", "birthwt_kg", "GestAge_weeks", "education_3cat", "Race3", "parity_3cat", 
+    "mom_age_delv", "prePregBMIthreeLev", "asrs_ADHD_2cat")
+
+regr.site.pv <- foreach (y = bhvFtrs, .verbose = TRUE, .packages = 'splines') %dopar% {
+    lm.site(covariates, mvalues, regrVals.df, bhvFtrs)
+    }
+@
