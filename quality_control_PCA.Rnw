@@ -1,0 +1,70 @@
+\documentclass[12pt]{article}
+
+\usepackage{times}
+\usepackage[cm]{fullpage}
+
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+Plot the first 2 principal components of the ~650 quality control probes of all the samples.
+
+<<get_libraries, cache = FALSE, echo = TRUE, include = FALSE>>=
+
+library(RnBeads)
+library(ggplot2)
+library(IlluminaHumanMethylation450kmanifest)
+@
+
+<<load_data, cache = TRUE, echo = TRUE, include = TRUE>>=
+#load the R workspace where RnBeads object was created
+#the idat files and sample sheet are in the rawdata directory
+load('/home/guest/imp9/PTSD_methylation_1/rnb_set.RData')
+@
+
+<<PCA, cache = TRUE, echo = TRUE, include = FALSE, eval = FALSE>>=
+#this function gets the principal component scores of the qc probes for each sample
+#1 is green
+#2 is red
+getpc <- function(qc){
+        #get PC values on the first 2 dimensions
+        #remove rows with na
+        qc.rmna <- qc[complete.cases(qc),]
+        qc.cov <- cov(t(qc.rmna), use = 'all.obs')
+        eigvec <- eigen(qc.cov)[[2]]
+        pc1 <- eigvec[,1]
+        pc2 <- eigvec[,2]
+        w <- rbind(pc1, pc2)
+        pcvals <- w %*% qc.rmna
+        return(pcvals)
+}
+@
+
+<<plot_pca, cache = FALSE, dev = 'pdf', fig.env= ('figure'), eval = FALSE>>=
+#there are 2 color channels, so we plot the first 2 principal components for each channel
+gr.pc <- getpc(rnb.set@qc[[1]])
+plot(gr.pc[1,], gr.pc[2,])
+text(gr.pc[1,], gr.pc[2,], colnames(gr.pc), pos = 3)
+
+red.pc <- getpc(rnb.set@qc[[2]])
+plot(red.pc[1,], red.pc[2,])
+text(red.pc[1,], red.pc[2,], colnames(red.pc), pos = 3)
+
+#remove the two outlier samples 31 and 182
+#set the column labels for the truncated sample set
+lbl <- seq(dim(rnb.set@qc[[1]])[2])
+lbl <- lbl[c(-31, -182)]
+
+gr.qcprobes <- rnb.set@qc[[1]][,c(-31, -182)]
+gr.pc <- getpc(gr.qcprobes)
+plot(gr.pc[1,], gr.pc[2,])
+text(gr.pc[1,], gr.pc[2,], lbl, pos = 3)
+
+red.qcprobes <- rnb.set@qc[[1]][,c(-31, -182)]
+red.pc <- getpc(red.qcprobes)
+plot(red.pc[1,], red.pc[2,])
+text(red.pc[1,], red.pc[2,], lbl, pos = 3)
+@
+
+\end{document}
