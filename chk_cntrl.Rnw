@@ -1,0 +1,157 @@
+\documentclass[12pt]{article}
+
+\usepackage{times}
+\usepackage[cm]{fullpage}
+
+\setlength{\parskip}{6pt}
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+We have 192 methylation profiles from a case control cohort with PTSD. 
+There are 850 quality control probes per sample. We have 192 samples. 
+We will use the quality control probes to determine which samples to not include in our analysis.
+RnBeads indicated issues with the following controls: Specificity II in the red channel, Bisulfite conversion II in the red channel, specificity I in the red and green channel, BSI conversion in both channels, staining (just the 1 high probe) in the green channel, extension (probe 1) in the red channel, and non-polymorphic high probes in both channels (2 probes each). 
+We look at the Staining, Specificity 1, Specificity 2, extension, BSI and BS II controls.
+
+The illumina 450k methylation array utilizes 2 types of probes: TypeI probe has two types of beads
+
+In addition, there are 600 negative controls. First, lets plot a principal components plot of the quality control probes of all the samples.
+<<get_libraries, cache = FALSE, echo = TRUE, include = FALSE>>=
+
+library(RnBeads)
+library(ggplot2)
+library(IlluminaHumanMethylation450kmanifest)
+@
+
+<<load_data, cache = FALSE, echo = TRUE, include = TRUE>>=
+#load the R workspace where RnBeads object was created
+#the idat files and sample sheet are in the rawdata directory
+load('/home/guest/imp9/PTSD_methylation_1/rnb_set.RData')
+@
+
+<<controls, cache = FALSE, echo = TRUE, include = TRUE, eval = TRUE>>=
+
+#BISULFITE CONVERSION I Control
+#find indices of the BISULFITE CONVERSION I controls
+keep <- IlluminaHumanMethylation450kmanifest@data$TypeControl$Type == "BISULFITE CONVERSION I"
+bs.cntrl <- IlluminaHumanMethylation450kmanifest@data$TypeControl[keep,]
+
+#should have 2 qc lists for Cy3 & Cy5
+names(rnb.set@qc)
+dim(rnb.set@qc)
+
+colnames(rnb.set@qc[[1]]) <- pheno(rnb.set)$Sample_Name
+colnames(rnb.set@qc[[2]]) <- pheno(rnb.set)$Sample_Name
+
+bs1 <- rnb.set@qc[[1]][bs.cntrl$Address,]
+bs1.gr <- bs1[1:6,]
+#total green signals
+bs1.grsum <- bs1.gr[1:3,]+bs1.gr[4:6,]
+#ratio of unconverted (low) to total signal
+bs1.ratio <- bs1.gr[4:6,]/bs1.grsum
+
+bs1.rm <- vector(mode = "numeric")
+for(i in 1:3){
+	which(bs1.gr[i,]<4000)
+	bs1.rm <- union(bs1.rm, names(which(bs1.gr[i,]<4000)))
+	which(bs1.ratio[i,]>.2)
+	bs1.rm <- union(bs1.rm, names(which(bs1.ratio[i,]>.2)))
+}
+print(bs1.rm)
+sort(bs1.rm)
+length(bs1.rm)
+
+#Staining controls
+#there are 6 staining controls
+
+keep <- IlluminaHumanMethylation450kmanifest@data$TypeControl$Type == "STAINING"
+st.cntrl <- IlluminaHumanMethylation450kmanifest@data$TypeControl[keep,]
+
+st.gr <- rnb.set@qc[[1]][st.cntrl$Address,]
+#probe id 41666334
+st.rm <- names(which((st.gr['41666334',] < 1000)))
+
+#SPECIFICITY I control
+#there are 12 specificity controls
+#probes 1, 2, and 3 have issues in the green channel
+#the probe numers do not correspond with html document
+#probes 1, 2, 3 are supposed to be high in the green channel
+#similarly for the red channel, probes 7, 8, 9 are supposed to be high
+#probes 7,8, and 9 have issues in the red channel
+
+#there are 2 probes (31, 182) which causing errors in both red and green channels
+keep <- IlluminaHumanMethylation450kmanifest@data$TypeControl$Type == "SPECIFICITY I"
+sp1.cntrl <- IlluminaHumanMethylation450kmanifest@data$TypeControl[keep,]
+
+sp1.gr <- rnb.set@qc[[1]][sp1.cntrl$Address,]
+sp1.red <- rnb.set@qc[[2]][sp1.cntrl$Address,]
+
+sp1.rm <- vector(mode = "numeric")
+for(i in 1:3) {
+	sp1.rm <- union(sp1.rm, names(which(sp1.gr[i,] < 1000)))
+}
+for(i in 7:9) {
+	sp1.rm <- union(sp1.rm, names(which(sp1.red[i,] < 1000)))
+}
+
+print(sp1.rm)
+
+#SPECIFICITY II control
+#there are 3 specificity control probes
+keep <- IlluminaHumanMethylation450kmanifest@data$TypeControl$Type == "SPECIFICITY II"
+sp2.cntrl <- IlluminaHumanMethylation450kmanifest@data$TypeControl[keep,]
+
+sp2.red <- rnb.set@qc[[2]][sp2.cntrl$Address,]
+
+sp2.rm <- vector(mode = "numeric")
+for(i in 1:3) {
+	sp2.rm <- union(sp2.rm, names(which(sp2.red[i,] < 4000)))
+}
+
+#BISULFITE CONVERSION II controls
+#these probes are for Type 2 Beads for which there is only a single bead 
+#there are 4 BSII controls per channel, green is the background and red is high
+#Why probe 1 green(background is so high, the variance is low??
+#Remove samples with above 3000 intensity in probes 1 through 4 green channel which is background
+keep <- IlluminaHumanMethylation450kmanifest@data$TypeControl$Type == "BISULFITE CONVERSION II"
+bs2.cntrl <- IlluminaHumanMethylation450kmanifest@data$TypeControl[keep,]
+
+bs2.gr <- rnb.set@qc[[1]][bs2.cntrl$Address,]
+
+bs2.rm <- vector(mode = 'numeric')
+for(i in 2:4) {
+	bs2.rm <- union(bs2.rm,  names(which(bs2.gr[i,] > 3000)))
+	}
+print(bs2.rm)
+
+#EXTENSION controls
+#only probe1 (red channel) seems to be causing problems
+keep <- IlluminaHumanMethylation450kmanifest@data$TypeControl$Type == "EXTENSION"
+ext.cntrl <- IlluminaHumanMethylation450kmanifest@data$TypeControl[keep,]
+
+ext.red <- rnb.set@qc[[2]][ext.cntrl$Address,]
+#get an average of the values for each extension probe, so I can determine which are supposed to be low/ high
+rowMeans(ext.red)
+
+ext.rm <- names(which(ext.red[1,]< 1000))
+
+#combine all the vectors with samples that are to be removed and remove
+#duplicated entries
+#write the vector to rmsamples.csv
+samps.rm <- vector(mode = 'numeric')
+samps.rm <- union(bs1.rm, bs2.rm)
+print(length(samps.rm))
+samps.rm <- c(st.rm, ext.rm, bs1.rm, bs2.rm, sp2.rm, sp1.rm)
+samps.rm <- unique(samps.rm)
+print(samps.rm)
+write.csv(samps.rm, file = "rmsamps.csv", row.names=FALSE)
+@
+
+<<bisulfite_density_plots, cache = FALSE, echo = TRUE, include = TRUE, eval = FALSE>>=
+
+ggplot() + geom_density(colour = "red", data = bs1.ratio[1,]) + 
+  geom_density(colour = "blue", data = bs1.ratio[2,]) +
+  geom_density(colour = "green", data = bs1.ratio[3,])
+@
+\end{document}
