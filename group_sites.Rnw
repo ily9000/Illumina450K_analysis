@@ -8,13 +8,8 @@
 
 \begin{document}
 
-CpG sites can be categorized into gene feature groups and groups based on relative location to a CpG island.
-The 6 gene feature groups are TSS1500 (within 1500 bps of a transcription start site (TSS)), 
-TSS200 (within 200 bps of a TSS), 5’UTR (5’ untranslated region), 
-first exon, body and 3’UTR (3’ untranslated region). The 5 CpG classes based on relative location to an island
-are: South Shore, North Shore, South Shelf, North Shelf, and the CpG Island. South and North are referring to 
-areas upstream and downstream of the island.
-We will categorize the CpG probes and then get the aggregate statistics to increase the power of the regression analyses.
+CpG sites can be categorized into gene feature groups and groups based on relative location to a CpG island. The 6 gene feature groups are TSS1500 (within 1500 bps of a transcription start site (TSS)), TSS200 (within 200 bps of a TSS), 5’UTR (5’ untranslated region), first exon, body and 3’UTR (3’ untranslated region). The 5 CpG classes based on relative location to an island are: South Shore, North Shore, South Shelf, North Shelf, and the CpG Island. South and North are referring to 
+areas upstream and downstream of the island. We will categorize the CpG probes and then get the aggregate statistics to increase the power of the regression analyses.
 <<setup_methy450, cache = FALSE, echo = TRUE, include = FALSE>>=
 
 #Use a modified function from IMA library to create an object with 15 slots: 
